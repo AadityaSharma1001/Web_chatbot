@@ -1,40 +1,45 @@
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema({
-  googleId: { 
-    type: String, 
-    unique: true },
-
-  email: { 
+  email: {
     type: String,
-    unique: true },
+    unique: true,
+    required: true,
+  },
 
-  displayName: { 
-    type: String },
+  displayName: {
+    type: String,
+    required: true,
+  },
 
-  profilePicture: { 
-    type: String },
+  profilePicture: {
+    type: String,
+  },
 
-  status: { 
-    type: String },
+  status: {
+    type: String,
+  },
 
   lastSeen: {
-     type: Date },
+    type: Date,
+  },
 
-  notifications: [{
-     type: String }],
+  notifications: [
+    {
+      type: String,
+    },
+  ],
 
   createdAt: {
-     type: Date, 
-     default: Date.now },
-
-  updatedAt: { 
     type: Date,
-     default: Date.now },
+    default: Date.now,
+  },
 
-  id: { 
-    type: String, required: true, 
-    unique: true },
+  updatedAt: {
+    type: Date,
+    default: Date.now,
+  },
+
 });
 
 const User = mongoose.model("User", userSchema);

@@ -23,46 +23,68 @@ const createUser = async (req, res) => {
   }
 };
 
+
 const googleLogin = async (req, res) => {
-    const client = new OAuth2Client(CLIENT_ID);
+  const client = new OAuth2Client(CLIENT_ID);
 
-    try {
-        const token = req.headers.authorization?.split(' ')[1];  // Extract the token from the Authorization header   
+  try {
+      const token = req.headers.authorization?.split(' ')[1];
 
-        const ticket = await client.verifyIdToken({
-            idToken: token,
-            audience: CLIENT_ID,  // Specify the CLIENT_ID of the app that accesses the backend
-        });
+      // Add debug logging for token
+      console.log('Received token:', token);
+      
+      const ticket = await client.verifyIdToken({
+          idToken: token,
+          audience: CLIENT_ID,
+      });
 
-        const payload = ticket.getPayload();  // Get the user information
-        console.log('User verified:', payload);
+      const payload = ticket.getPayload();
+      console.log('User verified:', payload);
 
-        const email = payload.email;
-        const name = payload.name;
-        let user = await User.findOne({ email });
+      const email = payload.email;
+      const name = payload.name;
+      
+      // Add validation for email and name
+      if (!email || !name) {
+          throw new Error('Email and name are required from Google payload');
+      }
 
-        if (!user) {
-            console.log("Creating user");
-            user = await User.create({
-                email: email,
-                display_name: name
-            })
-        }
-        const { _id } = user;
-        const jwtToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { algorithm: 'HS256', expiresIn: '1d' });
+      let user = await User.findOne({ email });
 
-        return res.status(200).json({
-            success: true,
-            jwtToken,
-            user
-        })
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        })
+      if (!user) {
+          try {
+              user = await User.create({
+                  email: email,
+                  displayName: name,
+                  created_at: new Date(),
+                  updated_at: new Date()
+              });
+          } catch (createError) {
+              console.error("Error creating user:", createError);
+              throw createError;
+          }
+          console.log("User created successfully:", user);
+      }
 
-    }
+      const jwtToken = jwt.sign(
+          { id: user._id }, 
+          process.env.JWT_SECRET, 
+          { algorithm: 'HS256', expiresIn: '1d' }
+      );
+
+      return res.status(200).json({
+          success: true,
+          jwtToken,
+          user
+      });
+  } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({
+          success: false,
+          message: error.message,
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+  }
 }
 
 
