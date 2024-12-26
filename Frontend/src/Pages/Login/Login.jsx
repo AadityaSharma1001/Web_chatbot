@@ -1,67 +1,104 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import "./Login.css";
 
-const handleCredentialResponse = (response, navigate, axios) => {
-  const token = response.credential;
-  console.log("Google ID Token:", token);
-
-  // Send the token to your backend for verification
-  axios
-    .post(
-      "/login",
-      {},
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ` + token,
-        },
-      }
-    )
-    .then((res) => {
-      const { jwtToken } = res.data;
-      localStorage.setItem("jwtToken", jwtToken);
-      navigate("/dashboard");
-    })
-    .catch((err) => {
-      console.error(err);
-    });
-};
-
 const Login = () => {
   const navigate = useNavigate();
+  const [isGoogleSDKLoaded, setIsGoogleSDKLoaded] = useState(false);
 
+  // Verify existing token on component mount
   useEffect(() => {
-    // Verify if the user is already logged in
-    axios
-      .get("/verify")
-      .then((res) => {
-        if (res.status === 200) {
-          console.log("User already logged in");
+    const token = localStorage.getItem("jwtToken");
+
+    if (token) {
+      axios
+        .get(`${import.meta.env.VITE_BASE_URL}/users/verify`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+        .then((res) => {
           navigate("/home");
-        }
-      })
-      .catch((err) => console.error("User not logged in:", err));
-
-    // Initialize Google Login SDK
-    window.google?.accounts.id.initialize({
-      client_id:
-        "843966867210-kbtpkabomh9385n6ngegl558s5c46b7h.apps.googleusercontent.com",
-      callback: (response) => handleCredentialResponse(response, navigate, axios),
-    });
-
-    // Render the Google sign-in button
-    window.google?.accounts.id.renderButton(
-      document.getElementById("google-signin-button"),
-      { theme: "outline", size: "large" }
-    );
+        })
+        .catch(() => {
+          localStorage.removeItem("jwtToken");
+        });
+    }
   }, [navigate]);
 
+  // Load Google Sign-In SDK
+  useEffect(() => {
+    const loadGoogleSDK = () => {
+      if (document.getElementById("google-signin-sdk")) return;
+
+      const script = document.createElement("script");
+      script.id = "google-signin-sdk";
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.onload = initializeGoogleSignIn;
+      script.onerror = () => console.error("Failed to load Google Sign-In SDK");
+
+      document.body.appendChild(script);
+    };
+
+    const initializeGoogleSignIn = () => {
+      if (window.google?.accounts?.id) {
+        window.google.accounts.id.initialize({
+          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+          callback: handleCredentialResponse,
+        });
+
+        window.google.accounts.id.renderButton(
+          document.getElementById("google-signin-button"),
+          {
+            theme: "outline",
+            size: "large",
+          }
+        );
+
+        setIsGoogleSDKLoaded(true);
+      }
+    };
+
+    loadGoogleSDK();
+
+    return () => {
+      const script = document.getElementById("google-signin-sdk");
+      if (script) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
+  const handleCredentialResponse = (response) => {
+    const token = response.credential;
+
+    axios
+      .post(`${import.meta.env.VITE_BASE_URL}/users/login`, {}, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      .then((res) => {
+        const { jwtToken } = res.data;
+        if (jwtToken) {
+          localStorage.setItem("jwtToken", jwtToken);
+          navigate("/home");
+        } else {
+          console.error("JWT not received from backend");
+        }
+      })
+      .catch((err) => {
+        console.error("Error during login:", err);
+      });
+  };
+
   return (
-    <button id="google-signin-button" className="googleLoginButton">
-      Login with Google
-    </button>
+    <div className="login-container">
+      {!isGoogleSDKLoaded && <p>Loading Google Sign-In...</p>}
+      <div id="google-signin-button" className="googleLoginButton"></div>
+    </div>
   );
 };
 
